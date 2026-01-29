@@ -14,7 +14,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -30,8 +30,8 @@ export default function SignInPage() {
       return;
     }
 
-    // After sign-in, go to a simple "decide where to go" step
-    router.push("/post-signup");
+    // After sign-in, go to the app main page
+    router.push("/app");
     setLoading(false);
   }
 

@@ -89,9 +89,9 @@ export default function PostSignupPage() {
     }
 
     const json = await res.json();
+    // send everyone to the single app entry route
+    router.replace("/app");
 
-    if (json.role === "EMPLOYER") router.push(`/employer/${json.employerId}`);
-    else router.push(`/candidate/${json.candidateId}`);
   }
 
   if (stage === "checking") return <div className="p-6">Setting up…</div>;
