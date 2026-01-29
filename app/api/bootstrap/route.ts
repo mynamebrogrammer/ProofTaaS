@@ -56,24 +56,35 @@ export async function POST(req: Request) {
 
       if (insErr) return Response.json(insErr, { status: 500 });
 
-      await supabaseServer.from("verifications").upsert(
-        [
-          { profile_id: user.id, vtype: "EMAIL_DOMAIN" },
-          { profile_id: user.id, vtype: "MANUAL_REVIEW" },
-        ],
-        { onConflict: "profile_id,vtype" }
-      );
+      const { error: vErr } = await supabaseServer.from("verifications").upsert(
+    [
+      { profile_id: user.id, vtype: "EMAIL_DOMAIN" },
+      { profile_id: user.id, vtype: "WEBSITE" },
+      { profile_id: user.id, vtype: "EIN_LAST4" },
+      { profile_id: user.id, vtype: "SOS_REGISTRATION" },
+      { profile_id: user.id, vtype: "MANUAL_REVIEW" },
+    ],
+    { onConflict: "profile_id,vtype" }
+  );
+
+  if (vErr) return Response.json(vErr, { status: 500 });
+
 
       return Response.json({ ok: true, role, employerId: created.id });
     }
 
-    await supabaseServer.from("verifications").upsert(
-      [
-        { profile_id: user.id, vtype: "EMAIL_DOMAIN" },
-        { profile_id: user.id, vtype: "MANUAL_REVIEW" },
-      ],
-      { onConflict: "profile_id,vtype" }
-    );
+    const { error: vErr } = await supabaseServer.from("verifications").upsert(
+    [
+      { profile_id: user.id, vtype: "EMAIL_DOMAIN" },
+      { profile_id: user.id, vtype: "WEBSITE" },
+      { profile_id: user.id, vtype: "EIN_LAST4" },
+      { profile_id: user.id, vtype: "SOS_REGISTRATION" },
+      { profile_id: user.id, vtype: "MANUAL_REVIEW" },
+    ],
+    { onConflict: "profile_id,vtype" }
+  );
+
+  if (vErr) return Response.json(vErr, { status: 500 });
 
     return Response.json({ ok: true, role, employerId: existing.id });
   }
@@ -98,24 +109,32 @@ export async function POST(req: Request) {
 
     if (insErr) return Response.json(insErr, { status: 500 });
 
-    await supabaseServer.from("verifications").upsert(
-      [
-        { profile_id: user.id, vtype: "GOV_ID" },
-        { profile_id: user.id, vtype: "PHONE" },
-      ],
-      { onConflict: "profile_id,vtype" }
-    );
+    const { error: vErr } = await supabaseServer.from("verifications").upsert(
+  [
+    { profile_id: user.id, vtype: "GOV_ID" },
+    { profile_id: user.id, vtype: "PHONE" },
+    { profile_id: user.id, vtype: "MANUAL_REVIEW" },
+  ],
+  { onConflict: "profile_id,vtype" }
+);
+
+if (vErr) return Response.json(vErr, { status: 500 });
+
 
     return Response.json({ ok: true, role, candidateId: created.id });
   }
 
-  await supabaseServer.from("verifications").upsert(
-    [
-      { profile_id: user.id, vtype: "GOV_ID" },
-      { profile_id: user.id, vtype: "PHONE" },
-    ],
-    { onConflict: "profile_id,vtype" }
-  );
+  const { error: vErr } = await supabaseServer.from("verifications").upsert(
+  [
+    { profile_id: user.id, vtype: "GOV_ID" },
+    { profile_id: user.id, vtype: "PHONE" },
+    { profile_id: user.id, vtype: "MANUAL_REVIEW" },
+  ],
+  { onConflict: "profile_id,vtype" }
+);
+
+if (vErr) return Response.json(vErr, { status: 500 });
+
 
   return Response.json({ ok: true, role, candidateId: existingCand.id });
 }
