@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { supabaseRouteClient } from "@/lib/supabaseRoute";
-import LogoutButton from "@/app/components/logoutButton";
+import LogoutButton from "@/app/components/LogoutButton";
+
 
 export default async function EmployerDashboard() {
   const supaAuth = supabaseRouteClient();
