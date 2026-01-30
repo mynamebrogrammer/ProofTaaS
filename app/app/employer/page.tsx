@@ -1,3 +1,5 @@
+// this is the employer dashboard page
+
 import { redirect } from "next/navigation";
 import { supabaseRouteClient } from "@/lib/supabaseRoute";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -32,6 +34,20 @@ function labelFor(vtype: string) {
       return vtype;
   }
 }
+
+function actionFor(vtype: string, status: string) {
+  const s = (status ?? "PENDING").toUpperCase();
+
+  // Don't show "Submit" if already submitted/approved
+  if (s === "SUBMITTED" || s === "APPROVED") return null;
+
+  if (vtype === "EIN_LAST4") return { href: "/app/employer/verify/EIN", text: "Submit" };
+  if (vtype === "SOS_REGISTRATION") return { href: "/app/employer/verify/sos", text: "Submit" };
+  if (vtype === "WEBSITE") return { href: "/app/employer/verify/website", text: "Add" };
+
+  return null;
+}
+
 
 function badge(status: string) {
   const s = (status ?? "PENDING").toUpperCase();
@@ -70,7 +86,7 @@ export default async function EmployerDashboard() {
   }
 
   const map = new Map<string, string>();
-  (verifs ?? []).forEach((v: any) => map.set(v.vtype, v.status));
+  (verifs ?? []).forEach((v: VRow) => map.set(v.vtype, v.status));
 
   return (
     <div className="p-6 max-w-2xl">
@@ -90,15 +106,26 @@ export default async function EmployerDashboard() {
           {ORDER.map((vtype) => {
             const status = map.get(vtype) ?? "PENDING";
             const b = badge(status);
+            const action = actionFor(vtype, status);
+
             return (
               <li
                 key={vtype}
                 className="flex items-center justify-between rounded border border-gray-800 px-3 py-2"
               >
                 <span className="text-sm">{labelFor(vtype)}</span>
+                <div className="flex items-center gap-4">
+                  {action && (
+                    <a
+                      href={action.href}
+                      className="text-sm underline text-gray-200 hover:text-white">
+                      {action.text}
+                      </a>
+                  )}
                 <span className={`text-sm font-semibold ${b.cls}`}>
                   {b.text}
                 </span>
+                </div>
               </li>
             );
           })}
