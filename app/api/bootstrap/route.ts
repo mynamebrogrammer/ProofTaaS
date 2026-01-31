@@ -29,8 +29,12 @@ export async function POST(req: Request) {
   // 2) Role-specific row + seed verifications
   if (role === "EMPLOYER") {
     const company_name = String(body?.company_name ?? "").trim();
-    if (!company_name) return new Response("company_name is required", { status: 400 });
+    if (!company_name)
+      return new Response("company_name is required", { status: 400 });
     if (!user.email) return new Response("Missing user.email", { status: 400 });
+
+    // compute once so both paths share it
+    const email_domain = user.email.split("@")[1]?.toLowerCase() ?? null;
 
     const { data: existing, error: selErr } = await supabaseServer
       .from("employers")
@@ -40,9 +44,9 @@ export async function POST(req: Request) {
 
     if (selErr) return Response.json(selErr, { status: 500 });
 
-    if (!existing) {
-      const email_domain = user.email.split("@")[1]?.toLowerCase() ?? null;
+    let employerId: string;
 
+    if (!existing) {
       const { data: created, error: insErr } = await supabaseServer
         .from("employers")
         .insert({
@@ -56,37 +60,33 @@ export async function POST(req: Request) {
 
       if (insErr) return Response.json(insErr, { status: 500 });
 
-      const { error: vErr } = await supabaseServer.from("verifications").upsert(
-    [
-      { profile_id: user.id, vtype: "EMAIL_DOMAIN" },
-      { profile_id: user.id, vtype: "WEBSITE" },
-      { profile_id: user.id, vtype: "EIN_LAST4" },
-      { profile_id: user.id, vtype: "SOS_REGISTRATION" },
-      { profile_id: user.id, vtype: "MANUAL_REVIEW" },
-    ],
-    { onConflict: "profile_id,vtype" }
-  );
-
-  if (vErr) return Response.json(vErr, { status: 500 });
-
-
-      return Response.json({ ok: true, role, employerId: created.id });
+      employerId = created.id;
+    } else {
+      employerId = existing.id;
     }
 
+    // ✅ Seed verifications (idempotent)
+    // ✅ Auto-approve EMAIL_DOMAIN to unlock Phase 1
     const { error: vErr } = await supabaseServer.from("verifications").upsert(
-    [
-      { profile_id: user.id, vtype: "EMAIL_DOMAIN" },
-      { profile_id: user.id, vtype: "WEBSITE" },
-      { profile_id: user.id, vtype: "EIN_LAST4" },
-      { profile_id: user.id, vtype: "SOS_REGISTRATION" },
-      { profile_id: user.id, vtype: "MANUAL_REVIEW" },
-    ],
-    { onConflict: "profile_id,vtype" }
-  );
+      [
+        {
+          profile_id: user.id,
+          vtype: "EMAIL_DOMAIN",
+          status: "APPROVED",
+          verified_at: new Date().toISOString(),
+          verified_by: null, // system
+        },
+        { profile_id: user.id, vtype: "WEBSITE" },
+        { profile_id: user.id, vtype: "EIN_LAST4" },
+        { profile_id: user.id, vtype: "SOS_REGISTRATION" },
+        { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
+      ],
+      { onConflict: "profile_id,vtype" }
+    );
 
-  if (vErr) return Response.json(vErr, { status: 500 });
+    if (vErr) return Response.json(vErr, { status: 500 });
 
-    return Response.json({ ok: true, role, employerId: existing.id });
+    return Response.json({ ok: true, role, employerId });
   }
 
   // Candidate
@@ -97,6 +97,8 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (selErr) return Response.json(selErr, { status: 500 });
+
+  let candidateId: string;
 
   if (!existingCand) {
     const full_name = String(body?.full_name ?? "New Candidate").trim();
@@ -109,32 +111,21 @@ export async function POST(req: Request) {
 
     if (insErr) return Response.json(insErr, { status: 500 });
 
-    const { error: vErr } = await supabaseServer.from("verifications").upsert(
-  [
-    { profile_id: user.id, vtype: "GOV_ID" },
-    { profile_id: user.id, vtype: "PHONE" },
-    { profile_id: user.id, vtype: "MANUAL_REVIEW" },
-  ],
-  { onConflict: "profile_id,vtype" }
-);
-
-if (vErr) return Response.json(vErr, { status: 500 });
-
-
-    return Response.json({ ok: true, role, candidateId: created.id });
+    candidateId = created.id;
+  } else {
+    candidateId = existingCand.id;
   }
 
   const { error: vErr } = await supabaseServer.from("verifications").upsert(
-  [
-    { profile_id: user.id, vtype: "GOV_ID" },
-    { profile_id: user.id, vtype: "PHONE" },
-    { profile_id: user.id, vtype: "MANUAL_REVIEW" },
-  ],
-  { onConflict: "profile_id,vtype" }
-);
+    [
+      { profile_id: user.id, vtype: "GOV_ID" },
+      { profile_id: user.id, vtype: "PHONE" },
+      { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
+    ],
+    { onConflict: "profile_id,vtype" }
+  );
 
-if (vErr) return Response.json(vErr, { status: 500 });
+  if (vErr) return Response.json(vErr, { status: 500 });
 
-
-  return Response.json({ ok: true, role, candidateId: existingCand.id });
+  return Response.json({ ok: true, role, candidateId });
 }

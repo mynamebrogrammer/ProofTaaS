@@ -35,19 +35,40 @@ function labelFor(vtype: string) {
   }
 }
 
+// ✅ Phase logic
+function accessFrom(map: Map<string, string>) {
+  const s = (k: string) => (map.get(k) ?? "PENDING").toUpperCase();
+
+  // Phase 1: explore
+  const canExplore =
+    s("EMAIL_DOMAIN") === "APPROVED" &&
+    (s("MANUAL_REVIEW") === "PENDING" || s("MANUAL_REVIEW") === "APPROVED");
+
+  // Phase 2: engage/outreach
+  const canEngage =
+    canExplore &&
+    s("EIN_LAST4") === "APPROVED" &&
+    s("SOS_REGISTRATION") === "APPROVED";
+
+  return { canExplore, canEngage };
+}
+
 function actionFor(vtype: string, status: string) {
   const s = (status ?? "PENDING").toUpperCase();
 
-  // Don't show "Submit" if already submitted/approved
+  // Don't show action if already submitted/approved
   if (s === "SUBMITTED" || s === "APPROVED") return null;
 
-  if (vtype === "EIN_LAST4") return { href: "/app/employer/verify/EIN", text: "Submit" };
-  if (vtype === "SOS_REGISTRATION") return { href: "/app/employer/verify/SOS", text: "Submit" };
-  if (vtype === "WEBSITE") return { href: "/app/employer/verify/website", text: "Add" };
+  // ✅ IMPORTANT: lowercase routes (deploy-safe)
+  if (vtype === "EIN_LAST4")
+    return { href: "/app/employer/verify/ein", text: "Submit" };
+  if (vtype === "SOS_REGISTRATION")
+    return { href: "/app/employer/verify/sos", text: "Submit" };
+  if (vtype === "WEBSITE")
+    return { href: "/app/employer/verify/website", text: "Add" };
 
   return null;
 }
-
 
 function badge(status: string) {
   const s = (status ?? "PENDING").toUpperCase();
@@ -88,11 +109,45 @@ export default async function EmployerDashboard() {
   const map = new Map<string, string>();
   (verifs ?? []).forEach((v: VRow) => map.set(v.vtype, v.status));
 
+  const access = accessFrom(map);
+
   return (
     <div className="p-6 max-w-2xl">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Employer Dashboard</h1>
         <LogoutButton />
+      </div>
+
+      {/* ✅ Phase banner */}
+      <div className="mt-4 rounded border border-gray-700 p-4">
+        {access.canEngage ? (
+          <>
+            <div className="text-green-400 font-semibold">
+              Outreach unlocked ✅
+            </div>
+            <div className="mt-1 text-sm text-gray-400">
+              You can post jobs and reach out to candidates.
+            </div>
+          </>
+        ) : access.canExplore ? (
+          <>
+            <div className="text-yellow-300 font-semibold">
+              Explore mode ✅
+            </div>
+            <div className="mt-1 text-sm text-gray-400">
+              Approve EIN + SOS to unlock outreach and job posting.
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-red-400 font-semibold">
+              Verification required
+            </div>
+            <div className="mt-1 text-sm text-gray-400">
+              Approve Email Domain and start Manual Review to begin exploring.
+            </div>
+          </>
+        )}
       </div>
 
       <p className="mt-2 text-sm text-gray-400">
@@ -114,17 +169,20 @@ export default async function EmployerDashboard() {
                 className="flex items-center justify-between rounded border border-gray-800 px-3 py-2"
               >
                 <span className="text-sm">{labelFor(vtype)}</span>
+
                 <div className="flex items-center gap-4">
                   {action && (
                     <a
                       href={action.href}
-                      className="text-sm underline text-gray-200 hover:text-white">
+                      className="text-sm underline text-gray-200 hover:text-white"
+                    >
                       {action.text}
-                      </a>
+                    </a>
                   )}
-                <span className={`text-sm font-semibold ${b.cls}`}>
-                  {b.text}
-                </span>
+
+                  <span className={`text-sm font-semibold ${b.cls}`}>
+                    {b.text}
+                  </span>
                 </div>
               </li>
             );
