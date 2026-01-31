@@ -19,11 +19,27 @@ export async function POST(req: Request) {
   const vtype = body?.vtype as VType;
   const value = String(body?.value ?? "").trim();
 
-  // Step 2: EIN only (we'll add SOS next)
-  if (vtype !== "EIN_LAST4") return bad("Unsupported verification type", 400);
+  // Allow EIN + SOS for now (Website later)
+  if (vtype !== "EIN_LAST4" && vtype !== "SOS_REGISTRATION") {
+    return bad("Unsupported verification type", 400);
+  }
 
-  if (!/^\d{4}$/.test(value)) {
-    return bad("EIN_LAST4 must be exactly 4 digits", 400);
+  // Validation
+  if (vtype === "EIN_LAST4") {
+    if (!/^\d{4}$/.test(value)) {
+      return bad("EIN_LAST4 must be exactly 4 digits", 400);
+    }
+  }
+
+  if (vtype === "SOS_REGISTRATION") {
+    // Expect "STATE|REGNUMBER"
+    const [stRaw, rnRaw] = value.split("|");
+    const st = (stRaw ?? "").trim().toUpperCase();
+    const rn = (rnRaw ?? "").trim();
+
+    if (!st || !rn) return bad("SOS_REGISTRATION value must be STATE|REGNUMBER", 400);
+    if (!/^[A-Z]{2}$/.test(st)) return bad("Invalid state code", 400);
+    if (rn.length < 4) return bad("Registration number too short", 400);
   }
 
   // Ensure employer
@@ -35,9 +51,11 @@ export async function POST(req: Request) {
 
   if (profErr) return Response.json(profErr, { status: 500 });
   if (!profile) return bad("Profile not found", 400);
-  if ((profile.role as Role) !== "EMPLOYER") return bad("Only employers can submit EIN", 403);
+  if ((profile.role as Role) !== "EMPLOYER") {
+    return bad("Only employers can submit verification", 403);
+  }
 
-  // Ensure verification row exists + set SUBMITTED (idempotent)
+  // Ensure verification row exists + mark SUBMITTED (idempotent)
   const now = new Date().toISOString();
 
   const { data: vRow, error: vErr } = await supabaseServer
@@ -45,7 +63,7 @@ export async function POST(req: Request) {
     .upsert(
       {
         profile_id: user.id,
-        vtype: "EIN_LAST4",
+        vtype, // ✅ IMPORTANT: use the actual vtype
         status: "SUBMITTED",
         submitted_at: now,
       },
@@ -54,13 +72,15 @@ export async function POST(req: Request) {
     .select("id")
     .single();
 
-  if (vErr || !vRow) return Response.json(vErr ?? { message: "Verification upsert failed" }, { status: 500 });
+  if (vErr || !vRow) {
+    return Response.json(vErr ?? { message: "Verification upsert failed" }, { status: 500 });
+  }
 
   // Store latest evidence (requires unique(verification_id, kind))
   const { error: evErr } = await supabaseServer.from("verification_evidence").upsert(
     {
       verification_id: vRow.id,
-      kind: "EIN_LAST4",
+      kind: vtype, // ✅ IMPORTANT: store kind = the same vtype
       value,
     },
     { onConflict: "verification_id,kind" }

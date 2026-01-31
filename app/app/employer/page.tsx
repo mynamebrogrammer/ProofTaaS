@@ -42,7 +42,7 @@ function actionFor(vtype: string, status: string) {
   if (s === "SUBMITTED" || s === "APPROVED") return null;
 
   if (vtype === "EIN_LAST4") return { href: "/app/employer/verify/EIN", text: "Submit" };
-  if (vtype === "SOS_REGISTRATION") return { href: "/app/employer/verify/sos", text: "Submit" };
+  if (vtype === "SOS_REGISTRATION") return { href: "/app/employer/verify/SOS", text: "Submit" };
   if (vtype === "WEBSITE") return { href: "/app/employer/verify/website", text: "Add" };
 
   return null;
