@@ -118,6 +118,16 @@ export default async function EmployerDashboard() {
         <LogoutButton />
       </div>
 
+      <div className="mt-3 flex gap-3">
+        <a className="underline text-sm" href="/app/employer/candidates">
+          Browse candidates
+        </a>
+        <a className="underline text-sm" href="/app/employer/outreach">
+          Outreach
+        </a>
+      </div>
+
+
       {/* ✅ Phase banner */}
       <div className="mt-4 rounded border border-gray-700 p-4">
         {access.canEngage ? (

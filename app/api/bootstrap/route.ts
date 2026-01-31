@@ -117,13 +117,14 @@ export async function POST(req: Request) {
   }
 
   const { error: vErr } = await supabaseServer.from("verifications").upsert(
-    [
-      { profile_id: user.id, vtype: "GOV_ID" },
-      { profile_id: user.id, vtype: "PHONE" },
-      { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
-    ],
-    { onConflict: "profile_id,vtype" }
-  );
+  [
+    { profile_id: user.id, vtype: "GOV_ID", status: "PENDING" },
+    { profile_id: user.id, vtype: "PHONE", status: "PENDING" },
+    { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
+  ],
+  { onConflict: "profile_id,vtype" }
+);
+
 
   if (vErr) return Response.json(vErr, { status: 500 });
 
