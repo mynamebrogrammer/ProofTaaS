@@ -2,11 +2,7 @@ import { supabaseRouteClient } from "@/lib/supabaseRoute";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { twilio, verifySid } from "@/lib/twilioVerify";
 
-function normalizePhone(phone: string) {
-  return (phone ?? "").trim();
-}
-
-function normalizeCode(code: string) {
+function normalizeCode(code: unknown) {
   return String(code ?? "").trim();
 }
 
@@ -18,33 +14,50 @@ export async function POST(req: Request) {
 
   const { data: profile } = await supabaseServer
     .from("profiles")
-    .select("role")
+    .select("id, role")
     .eq("id", user.id)
     .single();
 
-  if (!profile) return new Response("Profile not found", { status: 404 });
-  if (profile.role !== "CANDIDATE") return new Response("Forbidden", { status: 403 });
+  if (!profile || profile.role !== "CANDIDATE") {
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const body = await req.json().catch(() => ({}));
-  const phone = normalizePhone(body?.phone);
   const code = normalizeCode(body?.code);
 
-  if (!phone || !phone.startsWith("+")) {
-    return new Response("Phone must be E.164", { status: 400 });
-  }
   if (!code || code.length < 4) {
     return new Response("Invalid code", { status: 400 });
   }
 
-  // Find PHONE verification row
-  const { data: vrow, error: vErr } = await supabaseServer
+  const { data: vrow } = await supabaseServer
     .from("verifications")
     .select("id,status")
-    .eq("user_id", user.id)
+    .eq("profile_id", profile.id)
     .eq("vtype", "PHONE")
     .single();
 
-  if (vErr || !vrow) return new Response("PHONE verification missing", { status: 404 });
+  if (!vrow) return new Response("Verification missing", { status: 404 });
+
+  if (vrow.status === "APPROVED") {
+    return Response.json({ ok: true });
+  }
+
+  // Load latest OTP_REQUEST
+  const { data: ev } = await supabaseServer
+    .from("verification_evidence")
+    .select("value")
+    .eq("verification_id", vrow.id)
+    .eq("kind", "OTP_REQUEST")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!ev?.value) {
+    return new Response("No OTP request found", { status: 400 });
+  }
+
+  const parsed = JSON.parse(ev.value);
+  const phone = parsed.phone_e164;
 
   try {
     const check = await twilio.verify.v2
@@ -52,31 +65,28 @@ export async function POST(req: Request) {
       .verificationChecks.create({ to: phone, code });
 
     if (check.status !== "approved") {
-      await supabaseServer.from("verification_evidence").insert({
-        verification_id: vrow.id,
-        kind: "OTP_FAILED",
-        data: { provider: "twilio", status: check.status },
-      });
       return new Response("Incorrect code", { status: 400 });
     }
 
-    // Approve PHONE
-    const { error: updErr } = await supabaseServer
+    await supabaseServer
       .from("verifications")
-      .update({ status: "APPROVED" })
+      .update({
+        status: "APPROVED",
+        verified_at: new Date().toISOString(),
+        verified_by: user.id,
+      })
       .eq("id", vrow.id);
 
-    if (updErr) return new Response("Failed to update status", { status: 500 });
-
-    const last4 = phone.slice(-4);
     await supabaseServer.from("verification_evidence").insert({
       verification_id: vrow.id,
       kind: "OTP_VERIFY",
-      data: { provider: "twilio", status: "approved", last4, sid: check.sid },
+      value: JSON.stringify({ provider: "twilio", sid: check.sid }),
     });
 
     return Response.json({ ok: true });
-  } catch {
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    console.error("Twilio verify failed:", errorMessage);
     return new Response("Verification failed", { status: 400 });
   }
 }

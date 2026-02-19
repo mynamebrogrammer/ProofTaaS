@@ -22,18 +22,14 @@ export async function POST(req: Request) {
     .from("profiles")
     .upsert({ id: user.id, role }, { onConflict: "id" });
 
-  if (profileErr) {
-    return Response.json(profileErr, { status: 500 });
-  }
+  if (profileErr) return Response.json(profileErr, { status: 500 });
 
   // 2) Role-specific row + seed verifications
   if (role === "EMPLOYER") {
     const company_name = String(body?.company_name ?? "").trim();
-    if (!company_name)
-      return new Response("company_name is required", { status: 400 });
+    if (!company_name) return new Response("company_name is required", { status: 400 });
     if (!user.email) return new Response("Missing user.email", { status: 400 });
 
-    // compute once so both paths share it
     const email_domain = user.email.split("@")[1]?.toLowerCase() ?? null;
 
     const { data: existing, error: selErr } = await supabaseServer
@@ -59,26 +55,26 @@ export async function POST(req: Request) {
         .single();
 
       if (insErr) return Response.json(insErr, { status: 500 });
-
       employerId = created.id;
     } else {
       employerId = existing.id;
     }
 
-    // ✅ Seed verifications (idempotent)
-    // ✅ Auto-approve EMAIL_DOMAIN to unlock Phase 1
+    // ✅ Seed verifications (idempotent) — ALWAYS include status
+    const now = new Date().toISOString();
+
     const { error: vErr } = await supabaseServer.from("verifications").upsert(
       [
         {
           profile_id: user.id,
           vtype: "EMAIL_DOMAIN",
           status: "APPROVED",
-          verified_at: new Date().toISOString(),
+          verified_at: now,
           verified_by: null, // system
         },
-        { profile_id: user.id, vtype: "WEBSITE" },
-        { profile_id: user.id, vtype: "EIN_LAST4" },
-        { profile_id: user.id, vtype: "SOS_REGISTRATION" },
+        { profile_id: user.id, vtype: "WEBSITE", status: "PENDING" },
+        { profile_id: user.id, vtype: "EIN_LAST4", status: "PENDING" },
+        { profile_id: user.id, vtype: "SOS_REGISTRATION", status: "PENDING" },
         { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
       ],
       { onConflict: "profile_id,vtype" }
@@ -110,21 +106,20 @@ export async function POST(req: Request) {
       .single();
 
     if (insErr) return Response.json(insErr, { status: 500 });
-
     candidateId = created.id;
   } else {
     candidateId = existingCand.id;
   }
 
+  // ✅ Seed candidate verifications (idempotent)
   const { error: vErr } = await supabaseServer.from("verifications").upsert(
-  [
-    { profile_id: user.id, vtype: "GOV_ID", status: "PENDING" },
-    { profile_id: user.id, vtype: "PHONE", status: "PENDING" },
-    { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
-  ],
-  { onConflict: "profile_id,vtype" }
-);
-
+    [
+      { profile_id: user.id, vtype: "GOV_ID", status: "PENDING" },
+      { profile_id: user.id, vtype: "PHONE", status: "PENDING" },
+      { profile_id: user.id, vtype: "MANUAL_REVIEW", status: "PENDING" },
+    ],
+    { onConflict: "profile_id,vtype" }
+  );
 
   if (vErr) return Response.json(vErr, { status: 500 });
 

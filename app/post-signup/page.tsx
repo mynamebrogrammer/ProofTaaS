@@ -59,7 +59,7 @@ export default function PostSignupPage() {
       return;
     }
 
-    const payload: any = { role };
+    const payload: { role: Role; company_name?: string; full_name?: string } = { role };
 
     if (role === "EMPLOYER") {
       if (!companyName.trim()) {
@@ -88,7 +88,6 @@ export default function PostSignupPage() {
       return;
     }
 
-    const json = await res.json();
     // send everyone to the single app entry route
     router.replace("/app");
 
